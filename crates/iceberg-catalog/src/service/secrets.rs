@@ -29,6 +29,7 @@ where
 
 #[derive(Debug, Clone)]
 pub enum Secrets {
+    Mssql(crate::implementations::mssql::SecretsState),
     Postgres(crate::implementations::postgres::SecretsState),
     KV2(crate::implementations::kv2::SecretsState),
 }

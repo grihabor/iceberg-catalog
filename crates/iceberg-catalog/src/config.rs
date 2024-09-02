@@ -120,6 +120,8 @@ pub enum SecretBackend {
     KV2,
     #[serde(alias = "postgres")]
     Postgres,
+    #[serde(alias = "mssql")]
+    Mssql,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Redact)]

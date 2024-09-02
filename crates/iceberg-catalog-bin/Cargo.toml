@@ -18,13 +18,17 @@ name = "iceberg-catalog"
 path = "src/main.rs"
 
 [features]
+all = ["iceberg-catalog/all"]
+default = ["sqlx-postgres"]
+sqlx-postgres = ["iceberg-catalog/sqlx-postgres"]
+mssql = ["iceberg-catalog/mssql"]
 
 [dependencies]
 anyhow = { workspace = true }
 async-nats = { workspace = true }
 axum = { workspace = true }
 clap = { version = "^4.5", features = ["derive"] }
-iceberg-catalog = { path = "../iceberg-catalog", features = ["all"] }
+iceberg-catalog = { path = "../iceberg-catalog", default-features = false, features = ["s3-signer", "router"] }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
