@@ -18,8 +18,7 @@ name = "iceberg-catalog"
 path = "src/main.rs"
 
 [features]
-all = ["iceberg-catalog/all"]
-default = ["sqlx-postgres"]
+default = ["sqlx-postgres", "mssql"]
 sqlx-postgres = ["iceberg-catalog/sqlx-postgres"]
 mssql = ["iceberg-catalog/mssql"]
 

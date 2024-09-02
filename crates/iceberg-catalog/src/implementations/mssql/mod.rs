@@ -5,6 +5,8 @@ mod pagination;
 pub(crate) mod secrets;
 pub(crate) mod tabular;
 pub(crate) mod warehouse;
+mod pool;
+mod error;
 
 use self::dbutils::DBErrorHandler;
 use crate::api::Result;
@@ -22,6 +24,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+struct MssqlPoolOptions {
+    host: String,
+}
+
 /// # Errors
 /// Returns an error if the pool creation fails.
 pub async fn get_reader_pool(pool_opts: PgPoolOptions) -> anyhow::Result<sqlx::PgPool> {
@@ -34,7 +40,22 @@ pub async fn get_reader_pool(pool_opts: PgPoolOptions) -> anyhow::Result<sqlx::P
 
 /// # Errors
 /// Returns an error if the pool cannot be created.
-pub async fn get_writer_pool(pool_opts: PgPoolOptions) -> anyhow::Result<sqlx::PgPool> {
+pub async fn get_writer_pool(cfg: tiberius::Config ) -> anyhow::Result<sqlx::PgPool> {
+    let pool = deadpool_tiberius::Manager::new()
+        .host(pool_opts) // default to localhost
+        .port(1433) // default to
+        .basic_authentication("username", "password")
+        //  or .authentication(tiberius::AuthMethod)
+        .database("database1")
+        .trust_cert()
+        .max_size(10)
+        .wait_timeout(1.52) // in seconds, default to no timeout
+        .pre_recycle_sync(|_client, _metrics| {
+            // do sth with client object and pool metrics
+            Ok(())
+        })
+        .create_pool()?;
+
     let pool = pool_opts
         .connect_with(build_connect_ops(ConnectionType::Write)?)
         .await
