@@ -1,4 +1,4 @@
-use crate::implementations::postgres::{dbutils::DBErrorHandler as _, CatalogState};
+use crate::implementations::mssql::{dbutils::DBErrorHandler as _, CatalogState};
 use crate::service::TableCommit;
 use crate::{
     service::{
@@ -16,7 +16,7 @@ use iceberg_ext::{
 };
 
 use crate::api::iceberg::v1::{PaginatedTabulars, PaginationQuery};
-use crate::implementations::postgres::tabular::{
+use crate::implementations::mssql::tabular::{
     create_tabular, drop_tabular, list_tabulars, try_parse_namespace_ident, CreateTabular,
     TabularIdentBorrowed, TabularIdentOwned, TabularIdentUuid, TabularType,
 };
@@ -38,7 +38,7 @@ pub(crate) async fn table_ident_to_id<'e, 'c: 'e, E>(
 where
     E: 'e + sqlx::Executor<'c, Database = sqlx::Postgres>,
 {
-    crate::implementations::postgres::tabular::tabular_ident_to_id(
+    crate::implementations::mssql::tabular::tabular_ident_to_id(
         warehouse_id,
         &TabularIdentBorrowed::Table(table),
         list_flags,
@@ -66,7 +66,7 @@ pub(crate) async fn table_idents_to_ids<'e, 'c: 'e, E>(
 where
     E: 'e + sqlx::Executor<'c, Database = sqlx::Postgres>,
 {
-    let table_map = crate::implementations::postgres::tabular::tabular_idents_to_ids(
+    let table_map = crate::implementations::mssql::tabular::tabular_idents_to_ids(
         warehouse_id,
         tables
             .into_iter()
@@ -417,7 +417,7 @@ pub(crate) async fn rename_table(
     destination: &TableIdent,
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> Result<()> {
-    crate::implementations::postgres::tabular::rename_tabular(
+    crate::implementations::mssql::tabular::rename_tabular(
         warehouse_id,
         TabularIdentUuid::Table(*source_id),
         source,
@@ -549,9 +549,9 @@ pub(crate) mod tests {
 
     use crate::api::iceberg::types::PageToken;
     use crate::api::management::v1::warehouse::WarehouseStatus;
-    use crate::implementations::postgres::namespace::tests::initialize_namespace;
-    use crate::implementations::postgres::warehouse::set_warehouse_status;
-    use crate::implementations::postgres::warehouse::test::initialize_warehouse;
+    use crate::implementations::mssql::namespace::tests::initialize_namespace;
+    use crate::implementations::mssql::warehouse::set_warehouse_status;
+    use crate::implementations::mssql::warehouse::test::initialize_warehouse;
     use crate::service::ListFlags;
 
     use iceberg::spec::{NestedField, PrimitiveType, Schema, UnboundPartitionSpec};

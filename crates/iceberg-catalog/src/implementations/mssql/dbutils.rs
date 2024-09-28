@@ -13,7 +13,7 @@ impl DBErrorHandler for sqlx::Error {
     fn into_error_model(self, message: String) -> ErrorModel {
         return match self {
             Self::Database(ref db) => match db.code().as_deref().map(|s| &s[..2]) {
-                // https://www.postgresql.org/docs/current/errcodes-appendix.html
+                // https://www.mssqlql.org/docs/current/errcodes-appendix.html
                 Some(
                     "2D000" | "25000" | "25001" | "25P01" | "25P02" | "25P03" | "40000" | "40001"
                     | "40002" | "40003" | "40004",

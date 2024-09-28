@@ -17,7 +17,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 pub use secrets::SecretsState as SecretsStore;
 use sqlx::migrate::{Migrate, MigrateError};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::mssql::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Executor, PgPool};
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -210,9 +210,9 @@ impl ReadWrite {
     #[must_use]
     pub fn from_pools(read_pool: PgPool, write_pool: PgPool) -> Self {
         Self {
-            #[cfg(feature = "sqlx-postgres")]
+            #[cfg(feature = "sqlx-mssql")]
             read_pool,
-            #[cfg(feature = "sqlx-postgres")]
+            #[cfg(feature = "sqlx-mssql")]
             write_pool,
             health: Arc::new(RwLock::new(vec![
                 Health::now("read_pool", HealthStatus::Unknown),
@@ -221,7 +221,7 @@ impl ReadWrite {
         }
     }
 
-    #[cfg(feature = "sqlx-postgres")]
+    #[cfg(feature = "sqlx-mssql")]
     async fn health(pool: PgPool) -> HealthStatus {
         match sqlx::query("SELECT 1").fetch_one(&pool).await {
             Ok(_) => HealthStatus::Healthy,
@@ -328,19 +328,19 @@ fn build_connect_ops(typ: ConnectionType) -> anyhow::Result<PgConnectOptions> {
     } else {
         PgConnectOptions::new()
             .host(host.ok_or(anyhow!(
-                "A connection string or postgres host must be provided."
+                "A connection string or mssql host must be provided."
             ))?)
             .port(CONFIG.pg_port.ok_or(anyhow!(
-                "A connection string or postgres port must be provided."
+                "A connection string or mssql port must be provided."
             ))?)
             .username(CONFIG.pg_user.as_deref().ok_or(anyhow!(
-                "A connection string or postgres user must be provided."
+                "A connection string or mssql user must be provided."
             ))?)
             .password(CONFIG.pg_password.as_deref().ok_or(anyhow!(
-                "A connection string or postgres password must be provided."
+                "A connection string or mssql password must be provided."
             ))?)
             .database(CONFIG.pg_database.as_deref().ok_or(anyhow!(
-                "A connection string or postgres database must be provided."
+                "A connection string or mssql database must be provided."
             ))?)
             .ssl_mode(CONFIG.pg_ssl_mode.unwrap_or(PgSslMode::Prefer).into())
     };

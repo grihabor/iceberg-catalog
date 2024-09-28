@@ -14,7 +14,7 @@ use super::{
     },
     CatalogState, PostgresTransaction,
 };
-use crate::implementations::postgres::tabular::view::{
+use crate::implementations::mssql::tabular::view::{
     create_view, drop_view, list_views, load_view, rename_view, view_ident_to_id,
 };
 use crate::service::{
@@ -312,7 +312,7 @@ impl Catalog for super::Catalog {
         view_id: TableIdentUuid,
         include_deleted: bool,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
-    ) -> Result<crate::implementations::postgres::tabular::view::ViewMetadataWithLocation> {
+    ) -> Result<crate::implementations::mssql::tabular::view::ViewMetadataWithLocation> {
         load_view(view_id, include_deleted, &mut *transaction).await
     }
 

@@ -448,7 +448,7 @@ pub(crate) mod test {
     use super::*;
     use crate::service::storage::S3Flavor;
     use crate::{
-        implementations::postgres::PostgresTransaction,
+        implementations::mssql::PostgresTransaction,
         service::{storage::S3Profile, Catalog as _, Transaction as _},
     };
 

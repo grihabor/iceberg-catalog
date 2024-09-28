@@ -1,6 +1,6 @@
 mod load;
 
-use crate::implementations::postgres::dbutils::DBErrorHandler as _;
+use crate::implementations::mssql::dbutils::DBErrorHandler as _;
 use crate::{
     service::{ErrorModel, NamespaceIdentUuid, Result, TableIdent, TableIdentUuid},
     WarehouseIdent,
@@ -8,11 +8,11 @@ use crate::{
 
 use http::StatusCode;
 
-use crate::implementations::postgres::tabular::{
+use crate::implementations::mssql::tabular::{
     create_tabular, drop_tabular, list_tabulars, CreateTabular, TabularIdentBorrowed,
     TabularIdentUuid, TabularType,
 };
-use crate::implementations::postgres::{tabular, CatalogState};
+use crate::implementations::mssql::{tabular, CatalogState};
 use chrono::{DateTime, Utc};
 use iceberg::spec::{SchemaRef, ViewMetadata, ViewRepresentation, ViewVersionId, ViewVersionRef};
 use iceberg::NamespaceIdent;
@@ -528,11 +528,11 @@ impl From<iceberg::spec::ViewFormatVersion> for ViewFormatVersion {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::implementations::postgres::namespace::tests::initialize_namespace;
+    use crate::implementations::mssql::namespace::tests::initialize_namespace;
 
-    use crate::implementations::postgres::tabular::view::load_view;
-    use crate::implementations::postgres::warehouse::test::initialize_warehouse;
-    use crate::implementations::postgres::CatalogState;
+    use crate::implementations::mssql::tabular::view::load_view;
+    use crate::implementations::mssql::warehouse::test::initialize_warehouse;
+    use crate::implementations::mssql::CatalogState;
 
     use crate::service::TableIdentUuid;
 
@@ -646,7 +646,7 @@ pub(crate) mod tests {
         let namespace = NamespaceIdent::from_vec(vec!["my_namespace".to_string()]).unwrap();
         initialize_namespace(state.clone(), warehouse_id, &namespace, None).await;
         let namespace_id =
-            crate::implementations::postgres::tabular::table::tests::get_namespace_id(
+            crate::implementations::mssql::tabular::table::tests::get_namespace_id(
                 state.clone(),
                 warehouse_id,
                 &namespace,
@@ -824,7 +824,7 @@ pub(crate) mod tests {
         let namespace = NamespaceIdent::from_vec(vec!["my_namespace".to_string()]).unwrap();
         initialize_namespace(state.clone(), warehouse_id, &namespace, None).await;
         let namespace_id =
-            crate::implementations::postgres::tabular::table::tests::get_namespace_id(
+            crate::implementations::mssql::tabular::table::tests::get_namespace_id(
                 state.clone(),
                 warehouse_id,
                 &namespace,

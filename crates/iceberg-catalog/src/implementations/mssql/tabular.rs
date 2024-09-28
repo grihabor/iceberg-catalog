@@ -10,9 +10,9 @@ use http::StatusCode;
 use iceberg_ext::NamespaceIdent;
 
 use crate::api::iceberg::v1::{PaginatedTabulars, PaginationQuery, MAX_PAGE_SIZE};
-use crate::implementations::postgres::pagination::{PaginateToken, V1PaginateToken};
+use crate::implementations::mssql::pagination::{PaginateToken, V1PaginateToken};
 use crate::service::tabular_idents::{TabularIdentBorrowed, TabularIdentOwned, TabularIdentUuid};
-use sqlx::postgres::PgArguments;
+use sqlx::mssql::PgArguments;
 use sqlx::{Arguments, Execute, FromRow, PgConnection, Postgres, QueryBuilder};
 use std::collections::{HashMap, HashSet};
 use std::default::Default;
