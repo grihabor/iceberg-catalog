@@ -1,4 +1,6 @@
 use crate::api::ErrorModel;
+use deadpool;
+use tiberius;
 
 pub(crate) trait DBErrorHandler
 where
@@ -9,22 +11,14 @@ where
     }
 }
 
-impl DBErrorHandler for sqlx::Error {
+impl DBErrorHandler for deadpool::managed::PoolError<tiberius::error::Error> {
     fn into_error_model(self, message: String) -> ErrorModel {
-        return match self {
-            Self::Database(ref db) => match db.code().as_deref().map(|s| &s[..2]) {
-                // https://www.mssqlql.org/docs/current/errcodes-appendix.html
-                Some(
-                    "2D000" | "25000" | "25001" | "25P01" | "25P02" | "25P03" | "40000" | "40001"
-                    | "40002" | "40003" | "40004",
-                ) => ErrorModel::conflict(
-                    "Concurrent modification failed.",
-                    "TransactionFailed",
-                    Some(Box::new(self)),
-                ),
-                _ => ErrorModel::internal(message, "DatabaseError", Some(Box::new(self))),
-            },
-            _ => ErrorModel::internal(message, "DatabaseError", Some(Box::new(self))),
-        };
+        todo!()
+    }
+}
+
+impl DBErrorHandler for tiberius::error::Error {
+    fn into_error_model(self, message: String) -> ErrorModel {
+        todo!()
     }
 }

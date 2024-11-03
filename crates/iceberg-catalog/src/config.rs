@@ -91,6 +91,12 @@ pub struct DynAppConfig {
     pub pg_read_pool_connections: u32,
     pub pg_write_pool_connections: u32,
 
+    // ------------- MSSQL IMPLEMENTATION -------------
+    #[redact]
+    pub(crate) mssql_jdbc_connection_string: Option<String>,
+    pub mssql_read_pool_connections: u32,
+    pub mssql_write_pool_connections: u32,
+
     // ------------- NATS CLOUDEVENTS -------------
     pub nats_address: Option<Url>,
     pub nats_topic: Option<String>,
@@ -160,6 +166,9 @@ impl Default for DynAppConfig {
             pg_connection_max_lifetime: None,
             pg_read_pool_connections: 10,
             pg_write_pool_connections: 5,
+            mssql_jdbc_connection_string: None,
+            mssql_read_pool_connections: 10,
+            mssql_write_pool_connections: 5,
             nats_address: None,
             nats_topic: None,
             nats_creds_file: None,

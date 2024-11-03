@@ -16,10 +16,11 @@ use reqwest::Url;
 use std::sync::Arc;
 
 pub(crate) async fn serve(bind_addr: std::net::SocketAddr) -> Result<(), anyhow::Error> {
+    let (config, pool_config) = CONFIG.mssql_config();
     let read_pool =
-        iceberg_catalog::implementations::mssql::get_reader_pool(CONFIG.to_pool_opts()).await?;
+        iceberg_catalog::implementations::mssql::get_reader_pool(config, pool_config).await?;
     let write_pool =
-        iceberg_catalog::implementations::mssql::get_writer_pool(CONFIG.to_pool_opts()).await?;
+        iceberg_catalog::implementations::mssql::get_writer_pool(config, pool_config).await?;
 
     let catalog_state = CatalogState::from_pools(read_pool.clone(), write_pool.clone());
     let secrets_state: Secrets = match CONFIG.secret_backend {

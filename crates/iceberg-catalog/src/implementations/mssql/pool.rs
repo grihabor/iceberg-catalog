@@ -1,14 +1,13 @@
-use std::mem::replace;
+use std::{borrow::Cow, mem::replace};
 
 use deadpool::{
-    async_trait, managed,
+    managed,
     managed::{Hook, HookFuture, HookResult, Metrics, PoolConfig, RecycleError, RecycleResult},
     Runtime,
 };
 use tiberius::error::Error;
 use tiberius::{AuthMethod, EncryptionLevel};
 use tokio_util::compat::TokioAsyncWriteCompatExt;
-
 
 use super::error::SqlServerError;
 
@@ -17,23 +16,21 @@ pub(super) type Client = tiberius::Client<tokio_util::compat::Compat<tokio::net:
 /// Type aliasing for Pool.
 pub(super) type Pool = managed::Pool<Manager>;
 
+/// Copied from deadpool-tiberius.
+#[derive(Debug)]
 pub(super) struct Manager {
     config: tiberius::Config,
     pool_config: PoolConfig,
     runtime: Option<Runtime>,
     hooks: Hooks,
-    modify_tcp_stream:
-        Box<dyn Fn(&tokio::net::TcpStream) -> tokio::io::Result<()> + Send + Sync + 'static>,
 }
 
-#[async_trait]
 impl managed::Manager for Manager {
     type Type = Client;
     type Error = tiberius::error::Error;
 
     async fn create(&self) -> Result<Client, Self::Error> {
         let tcp = tokio::net::TcpStream::connect(self.config.get_addr()).await?;
-        (self.modify_tcp_stream)(&tcp)?;
         let client = Client::connect(self.config.clone(), tcp.compat_write()).await;
 
         match client {
@@ -60,12 +57,21 @@ impl managed::Manager for Manager {
     ) -> RecycleResult<Self::Error> {
         match obj.simple_query("").await {
             Ok(_) => Ok(()),
-            Err(e) => Err(RecycleError::Message(e.to_string())),
+            Err(e) => Err(RecycleError::Message(Cow::from(e.to_string()))),
         }
     }
 }
 
 impl Manager {
+    pub(super) fn new(config: tiberius::Config, pool_config: PoolConfig) -> Manager {
+        Manager {
+            config,
+            pool_config,
+            runtime: None,
+            hooks: Default::default(),
+        }
+    }
+
     /// Consume self, build a pool.
     pub fn create_pool(mut self) -> Result<Pool, SqlServerError> {
         let config = self.pool_config;

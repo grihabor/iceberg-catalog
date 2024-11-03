@@ -1,12 +1,12 @@
 mod catalog;
+use anyhow::Context;
 pub(crate) mod dbutils;
+mod error;
 pub(crate) mod namespace;
 mod pagination;
-pub(crate) mod secrets;
-pub(crate) mod tabular;
-pub(crate) mod warehouse;
 mod pool;
-mod error;
+pub(crate) mod secrets;
+pub(crate) mod warehouse;
 
 use self::dbutils::DBErrorHandler;
 use crate::api::Result;
@@ -15,103 +15,53 @@ use crate::service::health::{Health, HealthExt, HealthStatus};
 use crate::CONFIG;
 use anyhow::anyhow;
 use async_trait::async_trait;
+use deadpool::{
+    managed,
+    managed::{Hook, HookFuture, HookResult, Metrics, PoolConfig, RecycleError, RecycleResult},
+    Runtime,
+};
+use pool::Manager;
 pub use secrets::SecretsState as SecretsStore;
-use sqlx::migrate::{Migrate, MigrateError};
-use sqlx::mssql::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, Error, Executor, PgPool};
 use std::collections::HashSet;
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-struct MssqlPoolOptions {
-    host: String,
-}
-
 /// # Errors
 /// Returns an error if the pool creation fails.
-pub async fn get_reader_pool(pool_opts: PgPoolOptions) -> anyhow::Result<sqlx::PgPool> {
-    let pool = pool_opts
-        .connect_with(build_connect_ops(ConnectionType::Read)?)
-        .await
+pub async fn get_reader_pool(
+    mut config: tiberius::Config,
+    pool_config: PoolConfig,
+) -> anyhow::Result<pool::Pool> {
+    config.readonly(true);
+    let manager = Manager::new(config, pool_config);
+    let pool = manager
+        .create_pool()
         .map_err(|e| anyhow::anyhow!(e).context("Error creating read pool."))?;
     Ok(pool)
 }
 
 /// # Errors
 /// Returns an error if the pool cannot be created.
-pub async fn get_writer_pool(cfg: tiberius::Config ) -> anyhow::Result<sqlx::PgPool> {
-    let pool = deadpool_tiberius::Manager::new()
-        .host(pool_opts) // default to localhost
-        .port(1433) // default to
-        .basic_authentication("username", "password")
-        //  or .authentication(tiberius::AuthMethod)
-        .database("database1")
-        .trust_cert()
-        .max_size(10)
-        .wait_timeout(1.52) // in seconds, default to no timeout
-        .pre_recycle_sync(|_client, _metrics| {
-            // do sth with client object and pool metrics
-            Ok(())
-        })
-        .create_pool()?;
-
-    let pool = pool_opts
-        .connect_with(build_connect_ops(ConnectionType::Write)?)
-        .await
+pub async fn get_writer_pool(
+    config: tiberius::Config,
+    pool_config: PoolConfig,
+) -> anyhow::Result<pool::Pool> {
+    let pool = Manager::new(config, pool_config)
+        .create_pool()
         .map_err(|e| anyhow::anyhow!(e).context("Error creating write pool."))?;
     Ok(pool)
 }
 
 /// # Errors
 /// Returns an error if the migration fails.
-pub async fn migrate(pool: &sqlx::PgPool) -> anyhow::Result<()> {
-    sqlx::migrate!()
-        .run(pool)
-        .await
-        .map_err(|e| anyhow::anyhow!(e).context("Error migrating database."))?;
-    Ok(())
+pub async fn migrate(pool: &pool::Pool) -> anyhow::Result<()> {
+    todo!()
 }
 
 /// # Errors
 /// Returns an error if db connection fails or if migrations are missing.
-pub async fn check_migration_status(pool: &sqlx::PgPool) -> anyhow::Result<MigrationState> {
-    let mut conn = pool.acquire().await?;
-    let m = sqlx::migrate!();
-    let applied_migrations = match conn.list_applied_migrations().await {
-        Ok(migrations) => migrations,
-        Err(e) => {
-            if let MigrateError::Execute(Error::Database(db)) = &e {
-                if db.code().as_deref() == Some("42P01") {
-                    tracing::debug!(?db, "No migrations have been applied.");
-                    return Ok(MigrationState::NoMigrationsTable);
-                };
-            };
-            // we discard the error here since sqlx prefixes db errors with "while executing
-            // migrations" which is not what we are doing here.
-            tracing::debug!(?e, "Error listing applied migrations, even though the error may say different things, we are not applying migrations here.");
-            return Err(anyhow!("Error listing applied migrations"));
-        }
-    };
-
-    let to_be_applied = m
-        .migrations
-        .iter()
-        .map(|mig| (mig.version, &*mig.checksum))
-        .collect::<HashSet<_>>();
-    let applied = applied_migrations
-        .iter()
-        .map(|mig| (mig.version, &*mig.checksum))
-        .collect::<HashSet<_>>();
-    let missing = to_be_applied.difference(&applied).collect::<HashSet<_>>();
-
-    if missing.is_empty() {
-        tracing::debug!("Migrations are up to date.");
-        Ok(MigrationState::Complete)
-    } else {
-        tracing::debug!(?missing, "Migrations are missing.");
-        Ok(MigrationState::Missing)
-    }
+pub async fn check_migration_status(pool: &pool::Pool) -> anyhow::Result<MigrationState> {
+    todo!()
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -126,51 +76,51 @@ pub struct Catalog {}
 
 #[derive(Debug)]
 
-pub struct PostgresTransaction {
-    transaction: sqlx::Transaction<'static, sqlx::Postgres>,
+pub struct MssqlTransaction {
+    conn: deadpool::managed::Object<pool::Manager>,
 }
 
 #[async_trait::async_trait]
-impl crate::service::Transaction<CatalogState> for PostgresTransaction {
+impl crate::service::Transaction<CatalogState> for MssqlTransaction {
     type Transaction<'a> = &'a mut sqlx::Transaction<'static, sqlx::Postgres>;
 
     async fn begin_write(db_state: CatalogState) -> Result<Self> {
-        let transaction = db_state
+        let mut conn = db_state
             .write_pool()
-            .begin()
+            .get()
+            .await
+            .map_err(|e| e.into_error_model("Error starting transaction".to_string()))?;
+        conn.simple_query("BEGIN TRANSACTION")
             .await
             .map_err(|e| e.into_error_model("Error starting transaction".to_string()))?;
 
-        Ok(Self { transaction })
+        Ok(Self { conn })
     }
 
     async fn begin_read(db_state: CatalogState) -> Result<Self> {
-        let mut transaction = db_state
+        let mut conn = db_state
             .read_pool()
-            .begin()
+            .get()
+            .await
+            .map_err(|e| e.into_error_model("Error starting transaction".to_string()))?;
+        conn.simple_query("BEGIN TRANSACTION")
             .await
             .map_err(|e| e.into_error_model("Error starting transaction".to_string()))?;
 
-        transaction
-            .execute("SET TRANSACTION READ ONLY")
-            .await
-            .map_err(|e| {
-                e.into_error_model("Error setting transaction to read-only".to_string())
-            })?;
-        Ok(Self { transaction })
+        Ok(Self { conn })
     }
 
-    async fn commit(self) -> Result<()> {
-        self.transaction
-            .commit()
+    async fn commit(mut self) -> Result<()> {
+        self.conn
+            .simple_query("COMMIT")
             .await
             .map_err(|e| e.into_error_model("Error committing transaction".to_string()))?;
         Ok(())
     }
 
-    async fn rollback(self) -> Result<()> {
-        self.transaction
-            .rollback()
+    async fn rollback(mut self) -> Result<()> {
+        self.conn
+            .simple_query("ROLLBACK")
             .await
             .map_err(|e| e.into_error_model("Error rolling back transaction".to_string()))?;
         Ok(())
@@ -183,8 +133,8 @@ impl crate::service::Transaction<CatalogState> for PostgresTransaction {
 
 #[derive(Clone, Debug)]
 pub struct ReadWrite {
-    pub read_pool: sqlx::PgPool,
-    pub write_pool: sqlx::PgPool,
+    pub read_pool: pool::Pool,
+    pub write_pool: pool::Pool,
     pub health: Arc<RwLock<Vec<Health>>>,
 }
 
@@ -208,7 +158,7 @@ impl HealthExt for ReadWrite {
 
 impl ReadWrite {
     #[must_use]
-    pub fn from_pools(read_pool: PgPool, write_pool: PgPool) -> Self {
+    pub fn from_pools(read_pool: pool::Pool, write_pool: pool::Pool) -> Self {
         Self {
             read_pool,
             write_pool,
@@ -219,14 +169,20 @@ impl ReadWrite {
         }
     }
 
-    async fn health(pool: PgPool) -> HealthStatus {
-        match sqlx::query("SELECT 1").fetch_one(&pool).await {
+    async fn health(pool: pool::Pool) -> HealthStatus {
+        match Self::_health(pool).await {
             Ok(_) => HealthStatus::Healthy,
             Err(e) => {
-                tracing::warn!(?e, ?pool, "Pool is unhealthy");
-                HealthStatus::Unhealthy
+                tracing::warn!(?e, "Pool is unhealthy");
+                return HealthStatus::Unhealthy;
             }
         }
+    }
+
+    async fn _health(pool: pool::Pool) -> anyhow::Result<()> {
+        let mut conn = pool.get().await?;
+        conn.simple_query("SELECT 1").await?.into_row().await?;
+        Ok(())
     }
 
     async fn write_health(&self) -> HealthStatus {
@@ -257,50 +213,33 @@ impl HealthExt for CatalogState {
 
 impl CatalogState {
     #[must_use]
-    pub fn from_pools(read_pool: PgPool, write_pool: PgPool) -> Self {
+    pub fn from_pools(read_pool: pool::Pool, write_pool: pool::Pool) -> Self {
         Self {
             read_write: ReadWrite::from_pools(read_pool, write_pool),
         }
     }
 
     #[must_use]
-    pub fn read_pool(&self) -> PgPool {
+    pub fn read_pool(&self) -> pool::Pool {
         self.read_write.read_pool.clone()
     }
 
     #[must_use]
-    pub fn write_pool(&self) -> PgPool {
+    pub fn write_pool(&self) -> pool::Pool {
         self.read_write.write_pool.clone()
     }
 }
 pub use secrets::SecretsState;
 
 impl DynAppConfig {
-    pub fn to_pool_opts(&self) -> PgPoolOptions {
-        sqlx::pool::PoolOptions::default()
-            .test_before_acquire(self.pg_test_before_acquire)
-            .max_lifetime(
-                self.pg_connection_max_lifetime
-                    .map(core::time::Duration::from_secs),
-            )
-            .after_connect(|_conn, meta| {
-                Box::pin(async move {
-                    tracing::debug!(metadata = ?meta, "pg pool established a new connection");
-                    Ok(())
-                })
-            })
-            .before_acquire(|_conn, meta| {
-                Box::pin(async move {
-                    tracing::trace!(metadata = ?meta, "acquiring connection from pg pool");
-                    Ok(true)
-                })
-            })
-            .after_release(|_conn, meta| {
-                Box::pin(async move {
-                    tracing::trace!(metadata = ?meta, "connection was released back to pg pool");
-                    Ok(true)
-                })
-            })
+    pub fn mssql_config(&self) -> anyhow::Result<(tiberius::Config, PoolConfig)> {
+        let connection_string = self
+            .mssql_jdbc_connection_string
+            .clone()
+            .ok_or(anyhow!("mssql_jdbc_connection_string is not set"))?;
+        let config = tiberius::Config::from_jdbc_string(&connection_string)
+            .context("valid jdbc connection string")?;
+        Ok((config, PoolConfig::default()))
     }
 }
 
@@ -308,48 +247,4 @@ impl DynAppConfig {
 enum ConnectionType {
     Read,
     Write,
-}
-
-fn build_connect_ops(typ: ConnectionType) -> anyhow::Result<PgConnectOptions> {
-    let url = match typ {
-        ConnectionType::Read => CONFIG.pg_database_url_read.as_deref(),
-        ConnectionType::Write => CONFIG.pg_database_url_write.as_deref(),
-    };
-
-    let host = match typ {
-        ConnectionType::Read => CONFIG.pg_host_r.as_deref(),
-        ConnectionType::Write => CONFIG.pg_host_w.as_deref(),
-    };
-    let opts = if let Some(cfg) = url {
-        PgConnectOptions::from_str(cfg)?
-    } else {
-        PgConnectOptions::new()
-            .host(host.ok_or(anyhow!(
-                "A connection string or mssql host must be provided."
-            ))?)
-            .port(CONFIG.pg_port.ok_or(anyhow!(
-                "A connection string or mssql port must be provided."
-            ))?)
-            .username(CONFIG.pg_user.as_deref().ok_or(anyhow!(
-                "A connection string or mssql user must be provided."
-            ))?)
-            .password(CONFIG.pg_password.as_deref().ok_or(anyhow!(
-                "A connection string or mssql password must be provided."
-            ))?)
-            .database(CONFIG.pg_database.as_deref().ok_or(anyhow!(
-                "A connection string or mssql database must be provided."
-            ))?)
-            .ssl_mode(CONFIG.pg_ssl_mode.unwrap_or(PgSslMode::Prefer).into())
-    };
-    let opts = if let Some(cert) = CONFIG.pg_ssl_root_cert.as_deref() {
-        opts.ssl_root_cert(cert)
-    } else {
-        opts
-    };
-    let opts = if CONFIG.pg_enable_statement_logging {
-        opts
-    } else {
-        opts.disable_statement_logging()
-    };
-    Ok(opts)
 }
