@@ -29,8 +29,10 @@ where
 
 #[derive(Debug, Clone)]
 pub enum Secrets {
-    Mssql(crate::implementations::mssql::SecretsState),
+    #[cfg(feature = "sqlx-postgres")]
     Postgres(crate::implementations::postgres::SecretsState),
+    #[cfg(feature = "mssql")]
+    Mssql(crate::implementations::mssql::SecretsState),
     KV2(crate::implementations::kv2::SecretsState),
 }
 
@@ -41,7 +43,10 @@ impl SecretStore for Secrets {
         secret_id: &SecretIdent,
     ) -> crate::api::Result<Secret<S>> {
         match self {
+            #[cfg(feature = "sqlx-postgres")]
             Self::Postgres(state) => state.get_secret_by_id(secret_id).await,
+            #[cfg(feature = "mssql")]
+            Self::Mssql(state) => state.get_secret_by_id(secret_id).await,
             Self::KV2(state) => state.get_secret_by_id(secret_id).await,
         }
     }
@@ -51,14 +56,20 @@ impl SecretStore for Secrets {
         secret: S,
     ) -> crate::api::Result<SecretIdent> {
         match self {
+            #[cfg(feature = "sqlx-postgres")]
             Self::Postgres(state) => state.create_secret(secret).await,
+            #[cfg(feature = "mssql")]
+            Self::Mssql(state) => state.create_secret(secret).await,
             Self::KV2(state) => state.create_secret(secret).await,
         }
     }
 
     async fn delete_secret(&self, secret_id: &SecretIdent) -> crate::api::Result<()> {
         match self {
+            #[cfg(feature = "sqlx-postgres")]
             Self::Postgres(state) => state.delete_secret(secret_id).await,
+            #[cfg(feature = "mssql")]
+            Self::Mssql(state) => state.delete_secret(secret_id).await,
             Self::KV2(state) => state.delete_secret(secret_id).await,
         }
     }
@@ -68,22 +79,36 @@ impl SecretStore for Secrets {
 impl HealthExt for Secrets {
     async fn health(&self) -> Vec<Health> {
         match self {
+            #[cfg(feature = "sqlx-postgres")]
             Self::Postgres(state) => state.health().await,
+            #[cfg(feature = "mssql")]
+            Self::Mssql(state) => state.health().await,
             Self::KV2(state) => state.health().await,
         }
     }
 
     async fn update_health(&self) {
         match self {
+            #[cfg(feature = "sqlx-postgres")]
             Self::Postgres(state) => state.update_health().await,
+            #[cfg(feature = "mssql")]
+            Self::Mssql(state) => state.update_health().await,
             Self::KV2(state) => state.update_health().await,
         }
     }
 }
 
+#[cfg(feature = "sqlx-postgres")]
 impl From<crate::implementations::postgres::SecretsState> for Secrets {
     fn from(state: crate::implementations::postgres::SecretsState) -> Self {
         Self::Postgres(state)
+    }
+}
+
+#[cfg(feature = "mssql")]
+impl From<crate::implementations::mssql::SecretsState> for Secrets {
+    fn from(state: crate::implementations::mssql::SecretsState) -> Self {
+        Self::Mssql(state)
     }
 }
 

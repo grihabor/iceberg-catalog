@@ -9,6 +9,7 @@ use tiberius::error::Error;
 use tiberius::{AuthMethod, EncryptionLevel};
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
+
 use super::error::SqlServerError;
 
 /// Type aliasing for tiberius client with [`tokio`] as runtime.

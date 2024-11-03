@@ -210,9 +210,7 @@ impl ReadWrite {
     #[must_use]
     pub fn from_pools(read_pool: PgPool, write_pool: PgPool) -> Self {
         Self {
-            #[cfg(feature = "sqlx-mssql")]
             read_pool,
-            #[cfg(feature = "sqlx-mssql")]
             write_pool,
             health: Arc::new(RwLock::new(vec![
                 Health::now("read_pool", HealthStatus::Unknown),
@@ -221,7 +219,6 @@ impl ReadWrite {
         }
     }
 
-    #[cfg(feature = "sqlx-mssql")]
     async fn health(pool: PgPool) -> HealthStatus {
         match sqlx::query("SELECT 1").fetch_one(&pool).await {
             Ok(_) => HealthStatus::Healthy,
