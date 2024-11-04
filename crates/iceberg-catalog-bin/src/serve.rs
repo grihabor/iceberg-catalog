@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Error};
 use iceberg_catalog::api::router::{new_full_router, serve as service_serve};
-use iceberg_catalog::implementations::postgres::{Catalog, CatalogState};
+use iceberg_catalog::implementations::mssql::{Catalog, CatalogState};
 use iceberg_catalog::implementations::{AllowAllAuthState, AllowAllAuthZHandler};
 use iceberg_catalog::service::contract_verification::ContractVerifiers;
 use iceberg_catalog::service::event_publisher::{
@@ -16,10 +16,11 @@ use reqwest::Url;
 use std::sync::Arc;
 
 pub(crate) async fn serve(bind_addr: std::net::SocketAddr) -> Result<(), anyhow::Error> {
+    let (config, pool_config) = CONFIG.mssql_config();
     let read_pool =
-        iceberg_catalog::implementations::postgres::get_reader_pool(CONFIG.to_pool_opts()).await?;
+        iceberg_catalog::implementations::mssql::get_reader_pool(config, pool_config).await?;
     let write_pool =
-        iceberg_catalog::implementations::postgres::get_writer_pool(CONFIG.to_pool_opts()).await?;
+        iceberg_catalog::implementations::mssql::get_writer_pool(config, pool_config).await?;
 
     let catalog_state = CatalogState::from_pools(read_pool.clone(), write_pool.clone());
     let secrets_state: Secrets = match CONFIG.secret_backend {
@@ -31,11 +32,15 @@ pub(crate) async fn serve(bind_addr: std::net::SocketAddr) -> Result<(), anyhow:
         )
         .await?
         .into(),
-        SecretBackend::Postgres => {
+        SecretBackend::Mssql => {
             iceberg_catalog::implementations::postgres::SecretsState::from_pools(
                 read_pool, write_pool,
             )
             .into()
+        }
+        SecretBackend::Postgres => {
+            iceberg_catalog::implementations::mssql::SecretsState::from_pools(read_pool, write_pool)
+                .into()
         }
     };
     let auth_state = AllowAllAuthState;
