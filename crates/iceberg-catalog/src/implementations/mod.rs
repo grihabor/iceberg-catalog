@@ -4,6 +4,9 @@ pub const DEFAULT_PROJECT_ID: uuid::Uuid = uuid::uuid!("00000000-0000-0000-0000-
 #[cfg(feature = "sqlx-postgres")]
 pub mod postgres;
 
+#[cfg(feature = "mssql")]
+pub mod mssql;
+
 mod authz;
 pub mod kv2;
 

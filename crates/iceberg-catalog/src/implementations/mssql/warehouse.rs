@@ -448,7 +448,7 @@ pub(crate) mod test {
     use super::*;
     use crate::service::storage::S3Flavor;
     use crate::{
-        implementations::postgres::PostgresTransaction,
+        implementations::mssql::MssqlTransaction,
         service::{storage::S3Profile, Catalog as _, Transaction as _},
     };
 
@@ -461,7 +461,7 @@ pub(crate) mod test {
             ProjectIdent::from(uuid::Uuid::nil()),
             std::borrow::ToOwned::to_owned,
         );
-        let mut transaction = PostgresTransaction::begin_write(state.clone())
+        let mut transaction = MssqlTransaction::begin_write(state.clone())
             .await
             .unwrap();
 
@@ -547,7 +547,7 @@ pub(crate) mod test {
         let warehouse_id_1 = initialize_warehouse(state.clone(), None, Some(&project_id)).await;
 
         // Rename warehouse 1
-        let mut transaction = PostgresTransaction::begin_write(state.clone())
+        let mut transaction = MssqlTransaction::begin_write(state.clone())
             .await
             .unwrap();
         Catalog::rename_warehouse(warehouse_id_1, "new_name", transaction.transaction())
@@ -592,7 +592,7 @@ pub(crate) mod test {
         let project_id = ProjectIdent::from(uuid::Uuid::new_v4());
         let warehouse_id = initialize_warehouse(state.clone(), None, Some(&project_id)).await;
 
-        let mut transaction = PostgresTransaction::begin_write(state.clone())
+        let mut transaction = MssqlTransaction::begin_write(state.clone())
             .await
             .unwrap();
         Catalog::rename_warehouse(warehouse_id, "new_name", transaction.transaction())
@@ -600,7 +600,7 @@ pub(crate) mod test {
             .unwrap();
         transaction.commit().await.unwrap();
 
-        let mut read_transaction = PostgresTransaction::begin_read(state.clone())
+        let mut read_transaction = MssqlTransaction::begin_read(state.clone())
             .await
             .unwrap();
         let warehouse = Catalog::get_warehouse(warehouse_id, read_transaction.transaction())
